@@ -33,6 +33,7 @@ import javax.net.ssl.X509TrustManager;
 
 import ro.ase.ie.g1106_s04.R;
 import ro.ase.ie.g1106_s04.adapters.MovieAdapter;
+import ro.ase.ie.g1106_s04.database.MovieRepository;
 import ro.ase.ie.g1106_s04.model.Movie;
 import ro.ase.ie.g1106_s04.utils.HTTPConnectionService;
 import ro.ase.ie.g1106_s04.utils.MovieJsonParser;
@@ -45,6 +46,7 @@ public class MainActivity extends AppCompatActivity implements IMovieEventListen
     private final ArrayList<Movie> movieList = new ArrayList<>();
     private MovieAdapter movieAdapter;
     private RecyclerView recyclerView;
+    private MovieRepository movieRepository;
 
     private static final String MOVIES_JSON_URL ="https://jsonkeeper.com/b/FLBCO";
 
@@ -63,6 +65,12 @@ public class MainActivity extends AppCompatActivity implements IMovieEventListen
         recyclerView = findViewById(R.id.recyclerView);
         recyclerView.setAdapter(movieAdapter);
 
+        // Initialize Room repository
+        movieRepository = new MovieRepository(this);
+
+        // Load movies from database on startup
+        loadMoviesFromDatabase();
+
         launcher = registerForActivityResult(new ActivityResultContracts.StartActivityForResult(),
                 new ActivityResultCallback<ActivityResult>() {
                     @Override
@@ -72,11 +80,23 @@ public class MainActivity extends AppCompatActivity implements IMovieEventListen
                             Intent data = o.getData();
                             Movie movie = data.getParcelableExtra("movie");
                             if(!movieList.contains(movie)){
+                                // New movie - add to list and insert to database
                                 movieList.add(movie);
+                                movieRepository.insert(movie, id -> {
+                                    runOnUiThread(() -> {
+                                        Log.d("MainActivityTag", "Movie inserted with ID: " + id);
+                                    });
+                                });
                             }
                             else{
+                                // Existing movie - update in list and database
                                 int position=movieList.indexOf(movie);
                                 movieList.set(position, movie);
+                                movieRepository.update(movie, result -> {
+                                    runOnUiThread(() -> {
+                                        Log.d("MainActivityTag", "Movie updated: " + movie.getTitle());
+                                    });
+                                });
                             }
 
                             Log.d("MainActivityTag", movie.toString());
@@ -117,6 +137,22 @@ public class MainActivity extends AppCompatActivity implements IMovieEventListen
         return super.onOptionsItemSelected(item);
     }
 
+    private void loadMoviesFromDatabase() {
+        movieRepository.getAll(movies -> {
+            runOnUiThread(() -> {
+                if (movies != null && !movies.isEmpty()) {
+                    movieList.clear();
+                    movieList.addAll(movies);
+                    movieAdapter.notifyDataSetChanged();
+                    Toast.makeText(MainActivity.this,
+                            "Loaded " + movies.size() + " movies from database",
+                            Toast.LENGTH_SHORT).show();
+                    Log.d("MainActivityTag", "Loaded " + movies.size() + " movies from database");
+                }
+            });
+        });
+    }
+
     private void loadMoviesFromJson() {
         Thread thread = new Thread(new Runnable() {
             @Override
@@ -136,6 +172,17 @@ public class MainActivity extends AppCompatActivity implements IMovieEventListen
                                     movieList.clear();
                                     movieList.addAll(movies);
                                     movieAdapter.notifyDataSetChanged();
+
+                                    // Save loaded movies to database
+                                    movieRepository.deleteAll(result -> {
+                                        movieRepository.insertAll(movies, insertResult -> {
+                                            runOnUiThread(() -> {
+                                                Toast.makeText(MainActivity.this,
+                                                        "Movies saved to database",
+                                                        Toast.LENGTH_SHORT).show();
+                                            });
+                                        });
+                                    });
 
                                 } else {
                                     Toast.makeText(MainActivity.this,
@@ -182,9 +229,26 @@ public class MainActivity extends AppCompatActivity implements IMovieEventListen
 
     @Override
     public void onMovieDelete(int position) {
+        Movie movie = movieList.get(position);
         movieList.remove(position);
         movieAdapter.notifyDataSetChanged();
+
+        // Delete from database
+        movieRepository.delete(movie, result -> {
+            runOnUiThread(() -> {
+                Log.d("MainActivityTag", "Movie deleted: " + movie.getTitle());
+            });
+        });
     }
+
+    @Override
+    protected void onDestroy() {
+        super.onDestroy();
+        if (movieRepository != null) {
+            movieRepository.shutdown();
+        }
+    }
+
 //    private void trustEveryone()
 //    {
 //        HttpsURLConnection.setDefaultHostnameVerifier(new HostnameVerifier() {

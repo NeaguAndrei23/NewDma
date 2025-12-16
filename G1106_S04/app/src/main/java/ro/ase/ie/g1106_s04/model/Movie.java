@@ -4,23 +4,51 @@ import android.os.Parcel;
 import android.os.Parcelable;
 
 import androidx.annotation.NonNull;
+import androidx.room.ColumnInfo;
+import androidx.room.Entity;
+import androidx.room.Ignore;
+import androidx.room.PrimaryKey;
 
 import java.io.Serializable;
 import java.util.Date;
 import java.util.Objects;
 
+@Entity(tableName = "movies")
 public class Movie implements Parcelable {
+    @PrimaryKey(autoGenerate = true)
+    @ColumnInfo(name = "id")
+    private long id;
+
+    @ColumnInfo(name = "title")
     private String title; //EditText (PlainText)
+
+    @ColumnInfo(name = "budget")
     private Double budget; //EditText (Number)
+
+    @ColumnInfo(name = "release")
     private Date release; //EditText (Date)
+
+    @ColumnInfo(name = "duration")
     private Integer duration; //SeekBar
+
+    @ColumnInfo(name = "genre")
     private GenreEnum genre; // Spinner
+
+    @ColumnInfo(name = "p_guidance")
     private ParentalGuidanceEnum pGuidance; //RadioButtons with RadioGroup
+
+    @ColumnInfo(name = "rating")
     private Float rating; // RatingBar
+
+    @ColumnInfo(name = "watched")
     private Boolean watched; //Switch
+
+    @ColumnInfo(name = "poster_url")
     private String posterUrl; //EditText
 
+    @Ignore
     protected Movie(Parcel in) {
+        id = in.readLong();
         title = in.readString();
         if (in.readByte() == 0) {
             budget = null;
@@ -147,6 +175,7 @@ public class Movie implements Parcelable {
 
     @Override
     public void writeToParcel(@NonNull Parcel parcel, int i) {
+        parcel.writeLong(id);
         parcel.writeString(title);
         if (budget == null) {
             parcel.writeByte((byte) 0);
@@ -213,5 +242,13 @@ public class Movie implements Parcelable {
 
     public String getPosterUrl() {
         return posterUrl;
+    }
+
+    public long getId() {
+        return id;
+    }
+
+    public void setId(long id) {
+        this.id = id;
     }
 }
